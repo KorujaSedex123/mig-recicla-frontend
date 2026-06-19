@@ -159,6 +159,9 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-4 items-center">
+          <Link href="/relatorios" className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-sm font-semibold transition-colors">
+            📊 Relatórios
+          </Link>
           <Link href="/funcionarios" className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-sm font-semibold transition-colors">
             + Equipe
           </Link>

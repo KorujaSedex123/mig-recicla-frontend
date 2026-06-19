@@ -48,7 +48,7 @@ export default function NovaNotaFiscal() {
     setMensagem({ texto: "", tipo: "" });
 
     try {
-      const token = await getToken(); // Pega o token para salvar
+      const token = await getToken();
       const headers = {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`
@@ -60,13 +60,23 @@ export default function NovaNotaFiscal() {
         cliente: { id: Number(formData.clienteId) },
       };
 
+      // 1. Tenta salvar a NF
       const resNF = await fetch("http://localhost:8080/api/notas-fiscais", {
         method: "POST", headers, body: JSON.stringify(payloadNF),
       });
 
-      if (!resNF.ok) throw new Error("Erro ao criar Nota Fiscal");
+      // NOVO: Tratamento específico para nota duplicada (Erro 409 Conflict)
+      if (resNF.status === 409) {
+        const erroJson = await resNF.json();
+        throw new Error(erroJson.erro); // Lança o erro com o texto vindo do Java
+      }
+
+      // Se for outro erro diferente
+      if (!resNF.ok) throw new Error("Erro desconhecido ao criar Nota Fiscal");
+
       const notaFiscalCriada = await resNF.json();
 
+      // 2. Registra as embalagens
       const payloadBags = {
         quantidadeBags: Number(formData.quantidadeBags),
         status: "PENDENTE",
@@ -82,9 +92,11 @@ export default function NovaNotaFiscal() {
 
       setMensagem({ texto: "Nota Fiscal e saída de bags registradas com sucesso!", tipo: "sucesso" });
       setFormData({ numeroDaNota: "", dataEmissao: "", clienteId: "", quantidadeBags: "", prazoLimite: "" });
-    } catch (error) {
+
+    } catch (error: any) {
       console.error("Erro:", error);
-      setMensagem({ texto: "Ocorreu um erro na operação.", tipo: "erro" });
+      // Aqui a mágica acontece: pegamos a mensagem exata do throw new Error
+      setMensagem({ texto: error.message || "Ocorreu um erro na operação.", tipo: "erro" });
     } finally {
       setLoading(false);
     }
