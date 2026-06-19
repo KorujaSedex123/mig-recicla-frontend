@@ -24,7 +24,7 @@ interface Funcionario {
 
 export default function Dashboard() {
   const { getToken } = useAuth();
-  
+
   const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +76,7 @@ export default function Dashboard() {
       const token = await getToken();
       const url = `http://localhost:8080/api/embalagens-retorno/${embalagemSelecionada}/registrar-retorno?quantidade=${formBaixa.quantidade}&funcionarioId=${formBaixa.funcionarioId}`;
 
-      const res = await fetch(url, { 
+      const res = await fetch(url, {
         method: "PATCH",
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -113,7 +113,7 @@ export default function Dashboard() {
     // Extrai o ano, mês e dia da string que vem do banco de dados (seguro contra fusos horários)
     const dataLimiteStr = embalagem.prazoLimite.split('T')[0];
     const [ano, mes, dia] = dataLimiteStr.split('-');
-    
+
     // Cria a data limite garantindo que o cliente tem até o último minuto do dia
     const dataLimite = new Date(Number(ano), Number(mes) - 1, Number(dia));
     dataLimite.setHours(23, 59, 59, 999);
@@ -159,6 +159,9 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-4 items-center">
+          <Link href="/funcionarios" className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-sm font-semibold transition-colors">
+            + Equipe
+          </Link>
           <Link href="/clientes" className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-sm font-semibold transition-colors">
             + Novo Cliente
           </Link>
@@ -261,7 +264,7 @@ export default function Dashboard() {
               <h3 className="text-lg font-bold text-gray-900">Registrar Entrada de Bags</h3>
               <button onClick={fecharModal} className="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
             </div>
-            
+
             <form onSubmit={registrarBaixa} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Quantidade de Sacas *</label>
