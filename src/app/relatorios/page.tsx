@@ -6,8 +6,8 @@ import { useAuth } from "@clerk/nextjs";
 
 interface Embalagem {
   id: number;
-  quantidadeBags: number; 
-  quantidadeRetornada: number | null; 
+  quantidadeBags: number;
+  quantidadeRetornada: number | null;
   status: string;
   prazoLimite: string;
   dataRecebimento: string | null;
@@ -44,10 +44,10 @@ export default function RelatorioBags() {
   }, [getToken]);
 
   const totalEnviado = embalagens.reduce((acc, curr) => acc + curr.quantidadeBags, 0);
-  
+
   const totalRetornado = embalagens
     .filter(e => e.status === "RECEBIDO_NUTRIGUACU")
-    .reduce((acc, curr) => acc + (curr.quantidadeRetornada || 0), 0); 
+    .reduce((acc, curr) => acc + (curr.quantidadeRetornada || 0), 0);
 
   const saldoPendenteTotal = totalEnviado - totalRetornado;
   const taxaRetorno = totalEnviado > 0 ? ((totalRetornado / totalEnviado) * 100).toFixed(1) : "0.0";
@@ -55,7 +55,7 @@ export default function RelatorioBags() {
   return (
     <div className="min-h-screen bg-gray-50 p-8 font-sans text-gray-900">
       <div className="max-w-6xl mx-auto">
-        
+
         <header className="mb-8 flex justify-between items-center border-b pb-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Relatório de Conferência de Bags</h1>
@@ -90,8 +90,8 @@ export default function RelatorioBags() {
         <main className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-100 flex justify-between items-center">
             <h2 className="text-lg font-semibold text-gray-800">Detalhamento por Nota Fiscal</h2>
-            <button 
-              onClick={() => window.print()} 
+            <button
+              onClick={() => window.print()}
               className="px-3 py-1 bg-white border text-gray-700 rounded hover:bg-gray-50 text-xs font-semibold shadow-none transition-colors"
             >
               Imprimir Relatório
@@ -107,7 +107,7 @@ export default function RelatorioBags() {
                   <th className="px-6 py-3 text-center">Enviadas</th>
                   <th className="px-6 py-3 text-center">Retornadas</th>
                   <th className="px-6 py-3 text-center">Divergência</th>
-                  <th className="px-6 py-3">Responsável</th> {/* <-- NOVA COLUNA AQUI */}
+                  <th className="px-6 py-3">Responsável</th>
                   <th className="px-6 py-3">Status Real</th>
                 </tr>
               </thead>
@@ -123,7 +123,7 @@ export default function RelatorioBags() {
                 ) : (
                   embalagens.map((item) => {
                     const enviadas = item.quantidadeBags;
-                    const retornadas = item.status === "RECEBIDO_NUTRIGUACU" ? (item.quantidadeRetornada || 0) : 0; 
+                    const retornadas = item.status === "RECEBIDO_NUTRIGUACU" ? (item.quantidadeRetornada || 0) : 0;
                     const diferenca = enviadas - retornadas;
 
                     return (
@@ -141,16 +141,12 @@ export default function RelatorioBags() {
                             <span className="text-green-600 font-semibold">✔ Ok</span>
                           )}
                         </td>
-                        
-                        {/* AQUI MOSTRAMOS QUEM TROUXE AS BAGS */}
                         <td className="px-6 py-4 text-gray-700 font-medium">
                           {item.funcionarioRecebedor ? item.funcionarioRecebedor.nome : <span className="text-gray-400 italic">Aguardando</span>}
                         </td>
-                        
                         <td className="px-6 py-4">
-                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                            item.status === "RECEBIDO_NUTRIGUACU" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${item.status === "RECEBIDO_NUTRIGUACU" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                            }`}>
                             {item.status.replace("_", " ")}
                           </span>
                         </td>
