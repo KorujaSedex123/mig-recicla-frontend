@@ -61,20 +61,6 @@ export default function Dashboard() {
     buscarDados();
   }, [getToken]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "RECEBIDO_NUTRIGUACU": return "bg-green-100 text-green-800";
-      case "PENDENTE": return "bg-yellow-100 text-yellow-800";
-      case "ATRASADO": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const abrirModal = (id: number) => {
-    setEmbalagemSelecionada(id);
-    setModalAberta(true);
-  };
-
   const fecharModal = () => {
     setModalAberta(false);
     setEmbalagemSelecionada(null);
@@ -113,20 +99,55 @@ export default function Dashboard() {
   };
 
   // ==========================================
-  // CÁLCULO DAS MÉTRICAS (Somando as sacas)
+  // FUNÇÃO INTELIGENTE DE STATUS
   // ==========================================
-  const totalPendentes = embalagens
-    .filter(e => e.status === "PENDENTE")
-    .reduce((acc, curr) => acc + curr.quantidadeBags, 0);
+  const getStatusReal = (embalagem: Embalagem) => {
+    // Se o motorista já recolheu, o caso está encerrado independentemente da data
+    if (embalagem.status === "RECEBIDO_NUTRIGUACU") return "RECEBIDO_NUTRIGUACU";
 
-  const totalAtrasadas = embalagens
-    .filter(e => e.status === "ATRASADO")
-    .reduce((acc, curr) => acc + curr.quantidadeBags, 0);
+    if (!embalagem.prazoLimite) return embalagem.status;
 
-  const totalRecebidas = embalagens
-    .filter(e => e.status === "RECEBIDO_NUTRIGUACU")
-    .reduce((acc, curr) => acc + curr.quantidadeBags, 0);
+    // Pega a data atual
+    const hoje = new Date();
 
+    // Extrai o ano, mês e dia da string que vem do banco de dados (seguro contra fusos horários)
+    const dataLimiteStr = embalagem.prazoLimite.split('T')[0];
+    const [ano, mes, dia] = dataLimiteStr.split('-');
+    
+    // Cria a data limite garantindo que o cliente tem até o último minuto do dia
+    const dataLimite = new Date(Number(ano), Number(mes) - 1, Number(dia));
+    dataLimite.setHours(23, 59, 59, 999);
+
+    // O pulo do gato: o banco pode dizer PENDENTE, mas se a data já passou, o sistema acusa o ATRASO
+    if (embalagem.status === "PENDENTE" && hoje > dataLimite) {
+      return "ATRASADO";
+    }
+
+    return embalagem.status;
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "RECEBIDO_NUTRIGUACU": return "bg-green-100 text-green-800";
+      case "PENDENTE": return "bg-yellow-100 text-yellow-800";
+      case "ATRASADO": return "bg-red-100 text-red-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  // ==========================================
+  // CÁLCULO DAS MÉTRICAS COM O STATUS REAL
+  // ==========================================
+  let totalPendentes = 0;
+  let totalAtrasadas = 0;
+  let totalRecebidas = 0;
+
+  embalagens.forEach((e) => {
+    const statusReal = getStatusReal(e);
+    if (statusReal === "PENDENTE") totalPendentes += e.quantidadeBags;
+    else if (statusReal === "ATRASADO") totalAtrasadas += e.quantidadeBags;
+    else if (statusReal === "RECEBIDO_NUTRIGUACU") totalRecebidas += e.quantidadeBags;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 p-8 font-sans text-gray-900">
@@ -153,27 +174,19 @@ export default function Dashboard() {
       <main>
         {/* --- CARDS DE MÉTRICAS --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          
-          {/* Card Pendentes */}
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-yellow-400">
             <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Bags na Rua (Pendentes)</h3>
             <p className="text-3xl font-bold text-gray-900 mt-2">{totalPendentes} <span className="text-sm font-normal text-gray-500">un.</span></p>
           </div>
-
-          {/* Card Atrasadas */}
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-red-500">
             <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Bags Atrasadas</h3>
             <p className="text-3xl font-bold text-gray-900 mt-2">{totalAtrasadas} <span className="text-sm font-normal text-gray-500">un.</span></p>
           </div>
-
-          {/* Card Recebidas */}
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-green-500">
             <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Retornadas com Sucesso</h3>
             <p className="text-3xl font-bold text-gray-900 mt-2">{totalRecebidas} <span className="text-sm font-normal text-gray-500">un.</span></p>
           </div>
-
         </div>
-        {/* ------------------------- */}
 
         <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden relative">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-100">
@@ -203,30 +216,36 @@ export default function Dashboard() {
                     <td colSpan={7} className="px-6 py-8 text-center text-gray-500">Nenhum registro encontrado.</td>
                   </tr>
                 ) : (
-                  embalagens.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50 border-b last:border-0">
-                      <td className="px-6 py-4 font-medium text-gray-900">{item.notaFiscal.numeroDaNota}</td>
-                      <td className="px-6 py-4">{item.notaFiscal.cliente.nome}</td>
-                      <td className="px-6 py-4">{item.quantidadeBags} un.</td>
-                      <td className="px-6 py-4">{new Date(item.prazoLimite).toLocaleDateString("pt-BR")}</td>
-                      <td className="px-6 py-4">{item.funcionarioRecebedor ? item.funcionarioRecebedor.nome : "—"}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(item.status)}`}>
-                          {item.status.replace("_", " ")}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        {(item.status === "PENDENTE" || item.status === "ATRASADO") && (
-                          <button
-                            onClick={() => abrirModal(item.id)}
-                            className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded font-semibold text-xs transition-colors"
-                          >
-                            Dar Baixa
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  embalagens.map((item) => {
+                    const statusReal = getStatusReal(item); // O sistema toma a decisão linha por linha
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50 border-b last:border-0">
+                        <td className="px-6 py-4 font-medium text-gray-900">{item.notaFiscal.numeroDaNota}</td>
+                        <td className="px-6 py-4">{item.notaFiscal.cliente.nome}</td>
+                        <td className="px-6 py-4">{item.quantidadeBags} un.</td>
+                        <td className="px-6 py-4">{new Date(item.prazoLimite).toLocaleDateString("pt-BR")}</td>
+                        <td className="px-6 py-4">{item.funcionarioRecebedor ? item.funcionarioRecebedor.nome : "—"}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(statusReal)}`}>
+                            {statusReal.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {(statusReal === "PENDENTE" || statusReal === "ATRASADO") && (
+                            <button
+                              onClick={() => {
+                                setEmbalagemSelecionada(item.id);
+                                setModalAberta(true);
+                              }}
+                              className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded font-semibold text-xs transition-colors shadow-none"
+                            >
+                              Dar Baixa
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -234,6 +253,7 @@ export default function Dashboard() {
         </div>
       </main>
 
+      {/* MODAL MANTIDO INTACTO ABAIXO... */}
       {modalAberta && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 w-full max-w-md overflow-hidden text-gray-900">
