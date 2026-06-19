@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { UserButton, useAuth } from "@clerk/nextjs";
 
 interface Embalagem {
   id: number;
@@ -11,62 +12,61 @@ interface Embalagem {
   dataRecebimento: string | null;
   notaFiscal: {
     numeroDaNota: string;
-    cliente: {
-      nome: string;
-    };
+    cliente: { nome: string; };
   };
-  funcionarioRecebedor: {
-    nome: string;
-  } | null;
+  funcionarioRecebedor: { nome: string; } | null;
 }
 
-// Nova interface para os funcionários/motoristas
 interface Funcionario {
   id: number;
   nome: string;
 }
 
 export default function Dashboard() {
+  const { getToken } = useAuth();
+  
   const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados do Modal de Baixa
   const [modalAberta, setModalAberta] = useState(false);
   const [embalagemSelecionada, setEmbalagemSelecionada] = useState<number | null>(null);
   const [formBaixa, setFormBaixa] = useState({ quantidade: "", funcionarioId: "" });
   const [loadingBaixa, setLoadingBaixa] = useState(false);
 
   useEffect(() => {
-    // Busca as embalagens/NFs
-    fetch("http://localhost:8080/api/embalagens-retorno")
-      .then((res) => res.json())
-      .then((data) => {
-        setEmbalagens(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Erro ao buscar embalagens:", err);
-        setLoading(false);
-      });
+    const buscarDados = async () => {
+      try {
+        const token = await getToken();
+        const headers = { "Authorization": `Bearer ${token}` };
 
-    // Busca os funcionários para preencher o select do Modal
-    fetch("http://localhost:8080/api/funcionarios")
-      .then((res) => res.json())
-      .then((data) => setFuncionarios(data))
-      .catch((err) => console.error("Erro ao buscar funcionários:", err));
-  }, []);
+        const resEmb = await fetch("http://localhost:8080/api/embalagens-retorno", { headers });
+        if (resEmb.ok) {
+          const dataEmb = await resEmb.json();
+          setEmbalagens(dataEmb);
+        }
+
+        const resFunc = await fetch("http://localhost:8080/api/funcionarios", { headers });
+        if (resFunc.ok) {
+          const dataFunc = await resFunc.json();
+          setFuncionarios(dataFunc);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar dados:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    buscarDados();
+  }, [getToken]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "RECEBIDO_NUTRIGUACU":
-        return "bg-green-100 text-green-800";
-      case "PENDENTE":
-        return "bg-yellow-100 text-yellow-800";
-      case "ATRASADO":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
+      case "RECEBIDO_NUTRIGUACU": return "bg-green-100 text-green-800";
+      case "PENDENTE": return "bg-yellow-100 text-yellow-800";
+      case "ATRASADO": return "bg-red-100 text-red-800";
+      default: return "bg-gray-100 text-gray-800";
     }
   };
 
@@ -81,26 +81,28 @@ export default function Dashboard() {
     setFormBaixa({ quantidade: "", funcionarioId: "" });
   };
 
-  // Função que dispara o PATCH para a nossa API Java
   const registrarBaixa = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!embalagemSelecionada) return;
 
     setLoadingBaixa(true);
     try {
+      const token = await getToken();
       const url = `http://localhost:8080/api/embalagens-retorno/${embalagemSelecionada}/registrar-retorno?quantidade=${formBaixa.quantidade}&funcionarioId=${formBaixa.funcionarioId}`;
 
-      const res = await fetch(url, { method: "PATCH" });
+      const res = await fetch(url, { 
+        method: "PATCH",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
 
       if (res.ok) {
         const embalagemAtualizada = await res.json();
-        // Atualiza a tabela na tela sem precisar dar F5 na página
         setEmbalagens((prev) =>
           prev.map((emb) => (emb.id === embalagemSelecionada ? embalagemAtualizada : emb))
         );
         fecharModal();
       } else {
-        alert("Erro ao registrar a baixa. Verifique os dados.");
+        alert("Erro ao registrar a baixa.");
       }
     } catch (error) {
       console.error("Erro:", error);
@@ -110,8 +112,24 @@ export default function Dashboard() {
     }
   };
 
+  // ==========================================
+  // CÁLCULO DAS MÉTRICAS (Somando as sacas)
+  // ==========================================
+  const totalPendentes = embalagens
+    .filter(e => e.status === "PENDENTE")
+    .reduce((acc, curr) => acc + curr.quantidadeBags, 0);
+
+  const totalAtrasadas = embalagens
+    .filter(e => e.status === "ATRASADO")
+    .reduce((acc, curr) => acc + curr.quantidadeBags, 0);
+
+  const totalRecebidas = embalagens
+    .filter(e => e.status === "RECEBIDO_NUTRIGUACU")
+    .reduce((acc, curr) => acc + curr.quantidadeBags, 0);
+
+
   return (
-    <div className="min-h-screen bg-gray-50 p-8 font-sans">
+    <div className="min-h-screen bg-gray-50 p-8 font-sans text-gray-900">
       <header className="mb-8 border-b pb-4 flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Operações Logísticas</h1>
@@ -119,17 +137,44 @@ export default function Dashboard() {
             Painel de controle focado em suporte técnico e acompanhamento do pós-venda.
           </p>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
           <Link href="/clientes" className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-sm font-semibold transition-colors">
             + Novo Cliente
           </Link>
-          <Link href="/notas-fiscais" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-semibold transition-colors">
+          <Link href="/notas-fiscais" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-semibold transition-colors shadow-none">
             + Nova Nota Fiscal
           </Link>
+          <div className="ml-4 border-l pl-4 border-gray-300">
+            <UserButton />
+          </div>
         </div>
       </header>
 
       <main>
+        {/* --- CARDS DE MÉTRICAS --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          
+          {/* Card Pendentes */}
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-yellow-400">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Bags na Rua (Pendentes)</h3>
+            <p className="text-3xl font-bold text-gray-900 mt-2">{totalPendentes} <span className="text-sm font-normal text-gray-500">un.</span></p>
+          </div>
+
+          {/* Card Atrasadas */}
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-red-500">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Bags Atrasadas</h3>
+            <p className="text-3xl font-bold text-gray-900 mt-2">{totalAtrasadas} <span className="text-sm font-normal text-gray-500">un.</span></p>
+          </div>
+
+          {/* Card Recebidas */}
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-green-500">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Retornadas com Sucesso</h3>
+            <p className="text-3xl font-bold text-gray-900 mt-2">{totalRecebidas} <span className="text-sm font-normal text-gray-500">un.</span></p>
+          </div>
+
+        </div>
+        {/* ------------------------- */}
+
         <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden relative">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-100">
             <h2 className="text-lg font-semibold text-gray-800">Retorno de Embalagens por Nota Fiscal</h2>
@@ -171,7 +216,6 @@ export default function Dashboard() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        {/* Só exibe o botão se o status for Pendente ou Atrasado */}
                         {(item.status === "PENDENTE" || item.status === "ATRASADO") && (
                           <button
                             onClick={() => abrirModal(item.id)}
@@ -190,10 +234,9 @@ export default function Dashboard() {
         </div>
       </main>
 
-      {/* --- MODAL DE REGISTRO DE BAIXA --- */}
       {modalAberta && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 w-full max-w-md overflow-hidden text-gray-900">
             <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-lg font-bold text-gray-900">Registrar Entrada de Bags</h3>
               <button onClick={fecharModal} className="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
@@ -239,7 +282,7 @@ export default function Dashboard() {
                 <button
                   type="submit"
                   disabled={loadingBaixa || !formBaixa.quantidade || !formBaixa.funcionarioId}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold text-sm transition-colors disabled:bg-blue-400"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold text-sm transition-colors shadow-none disabled:bg-blue-400"
                 >
                   {loadingBaixa ? "Salvando..." : "Confirmar Entrada"}
                 </button>
